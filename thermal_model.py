@@ -1,8 +1,11 @@
 import numpy as np
+import pandas as pd
+import joblib
+from joblib import load
 
 
 class ThermalModel:
-    def __init__(self, params, gp_model):
+    def __init__(self, params, wall_RC_params, gp_model_name):
         """
         初始化 ThermalModel 类
 
@@ -10,12 +13,17 @@ class ThermalModel:
         - params: 预训练的 2R2C 模型参数 [R_ext_wall, R_zone_wall, C_wall, C_zone]
         - gp_model: 高斯过程模型，用于室温预测误差校正
         """
-        self.params = params
-        self.gp_model = gp_model
+        self.gp_model_name = gp_model_name
         self.c_air = 1005  # 空气比热容 (J/kg·K)
         self.dt = None  # 时间步长将在后续设置
+        self.Rstar_win, self.Rstar_wall, self.C_air = params
+        self.wall_RC = wall_RC_params
+        self.wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
+                                  'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
+                                  'TSI_S11', 'TSI_S12', 'TSI_S13',
+                                  'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
 
-    def predict(self, Tamb_t, Tin_t, Tsp_t1, Qin_t, step_pre, vent_flow):
+    def predict_next(self, Tamb_t, Tin_t, Twall_t_dict, Qin_t, step_pre, vent_flow, Tsp_high=24, Tsp_low=21):
         """
         预测下一时刻的热负荷和温度
 
@@ -35,48 +43,55 @@ class ThermalModel:
         - Q_space_cool: 空间制冷负荷 (W)
         """
         self.dt = step_pre  # 设置时间步长
-        R_ext_wall, R_zone_wall, C_wall, C_zone = self.params
 
-        # **计算墙体温度**
-        Twall_t = self._compute_Twall(Tamb_t, Tin_t, R_ext_wall, R_zone_wall)
-        Tin_t1 = Tsp_t1
-        dTin = Tin_t1 - Tin_t
+        Qwall_t = 0
+        Twall_t1_dict = {}
+        for wall in self.wall_temp_columns:
+            Twall_t = Twall_t_dict[wall]
+            Rex, Cwall = self.wall_RC.loc[wall, ['Rex', 'C']]
+            if wall in ['TSI_S4', 'TSI_S6']:
+                Tamb_t1 = Twall_t
+            else:
+                Tamb_t1 = Tamb_t
+            if wall in ['TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10']:
+                Rstar = self.Rstar_win
+            else:
+                Rstar = self.Rstar_wall
+            dTwall = self.dt / Cwall * ((Tamb_t1 - Twall_t) / Rex - (Twall_t - Tin_t) / Rstar)
+            Twall_t1 = Twall_t + dTwall
+            Twall_t1_dict[wall] = Twall_t1
+            Qwall_temp = (Twall_t - Tin_t) / Rstar
+            Qwall_t = Qwall_t + Qwall_temp
+
+        Tin_t1 = Tsp_high
+        dTin = (Tin_t1 - Tin_t) / self.dt
         # **计算下一时刻室内温度**
-        Q_zone = dTin * C_zone
-
-        # **计算墙体热流**
-        Q_ext_wall = (Tamb_t - Twall_t) / R_ext_wall  # 外墙传热
-        Q_zone_wall = (Twall_t - Tin_t) / R_zone_wall  # 墙体向室内传热
+        Qzone_t = dTin * self.C_air
 
         # **计算通风热流 (AHU 负荷)**
         Tsp_vent = self._compute_Tsp_vent(Tin_t)
         T_vent = Tsp_vent + 0.5
         temp_diff = T_vent - Tin_t
-        Q_ahu = vent_flow * self.c_air * temp_diff
+        Qahu_t = vent_flow * self.c_air * temp_diff
 
         # **热平衡
-        Q_space = Q_zone - Q_ahu - Q_zone_wall - Qin_t
+        Qspace_t = Qzone_t - Qahu_t - Qwall_t - Qin_t
 
         # **计算空间加热和制冷负荷**
-        Q_space_cool = 0
-        Q_space_heat = 0
-        if Q_space > 0:  # 加热
-            Q_space_heat = Q_space
-        elif Q_space < 0:  # 制冷
-            Q_space_cool = Q_space
+        if Qspace_t > 0:  # 加热
+            Tin_t1 = Tsp_low
+            dTin = (Tin_t1 - Tin_t) / self.dt
+            Qzone_t = dTin * self.C_air
+            # **热平衡
+            Qspace_t = Qzone_t - Qahu_t - Qwall_t - Qin_t
+            Qspace_t = max(Qspace_t, 0)
+            Qzone1_t = Qspace_t + Qahu_t + Qwall_t + Qin_t
+            Tin_t1 = Tin_t + Qzone1_t / self.C_air * self.dt
 
-        # **计算下一时刻墙体温度**
-        dTwall = (Q_ext_wall - Q_zone_wall) / C_wall
-        Twall_t1 = Twall_t + dTwall * self.dt
+        elif Qspace_t <= 0:  # 制冷
+            Qspace_t = Qspace_t
 
-
-        # **高斯过程校正室内温度**
-        if self.gp_model:
-            X = np.array([[Tamb_t, Tin_t, Qin_t]])  # 特征向量
-            correction = self.gp_model.predict(X)  # 校正值
-            Tin_t1 += correction
-
-        return Tin_t1, Twall_t1, Q_zone, Q_ahu, Q_space_heat, Q_space_cool
+        return Tin_t1, Twall_t1_dict, T_vent, Qzone_t, Qahu_t, Qspace_t
 
     def _compute_Tsp_vent(self, Tin_t):
         """
@@ -95,60 +110,90 @@ class ThermalModel:
         else:
             return -1.333 * Tin_t + 49 - 0.5
 
-    def _compute_Twall(self, Tamb_t, Tin_t, R_ext_wall, R_zone_wall):
-        """
-        计算墙体温度 Twall
+    def predict_peiod(self, time_horzion, Tamb_t_list, Tin_t, Qin_t_list, step_pre, vent_flow):
+        Twall_t_dict_0 = {}
+        for wall in self.wall_temp_columns:
+            Twall_t_dict_0[wall] = Tin_t
+        Tin_t_list = [Tin_t]
+        Qzone_t_list = [0]
+        Twall_t_dict_list = [Twall_t_dict_0]
+        Qahu_t_list = [0]
+        Qspace_t_list = [0]
+        for i in range(time_horzion):  # time horizon步长
+            Tin_t = Tin_t_list[i]
+            Tamb_t = Tamb_t_list[i]
+            Qin_t = Qin_t_list[i]
+            Twall_t_dict = Twall_t_dict_list[i]
+            Tin_t1, Twall_t1_dict, T_vent, Qzone_t0, Qahu_t0, Qspace_t0 = self.predict_next(Tamb_t, Tin_t, Twall_t_dict,
+                                                                                            Qin_t, step_pre, vent_flow)
+            Tin_t_list.append(Tin_t1)
+            Twall_t_dict_list.append(Twall_t1_dict)
+            if i != 0:
+                Qzone_t_list.append(Qzone_t0)
+                Qahu_t_list.append(Qahu_t0)
+                Qspace_t_list.append(Qspace_t0)
+            i += 1
 
-        参数:
-        - Tamb_t: 环境温度 (°C)
-        - Tin_t: 室内温度 (°C)
-        - R_ext_wall: 墙体外侧热阻
-        - R_zone_wall: 墙体内侧热阻
+        # 模拟加载高斯过程模型
+        try:
+            gp_model = load(self.gp_model_name)
+            print("高斯过程模型已加载。")
+            # 构建输入特征
+            time = np.arange(len(Tin_t_list)) * step_pre
+            external_temp = np.array(Tamb_t_list)
+            X = np.column_stack((time, external_temp))
 
-        返回:
-        - Twall: 墙体温度 (°C)
-        """
-        return (Tamb_t / R_ext_wall + Tin_t / R_zone_wall) / (1 / R_ext_wall + 1 / R_zone_wall)
+            # 使用模型预测校正值
+            correction = gp_model.predict(X)
+            Qspace_t_list_corrected = Qspace_t_list + correction
+        except FileNotFoundError:
+            gp_model = None
+            Qspace_t_list_corrected = Qspace_t_list
+            print("未找到高斯过程模型，继续使用未校正模型。")
+            return Tin_t_list, Twall_t_dict_list, Qzone_t_list, Qahu_t_list, Qspace_t_list, Qspace_t_list_corrected
 
 
 # 主函数，仅在直接运行脚本时执行
 if __name__ == "__main__":
     from joblib import load
 
-    # 模拟加载高斯过程模型
-    try:
-        gp_model = load("gp_model.pkl")
-        print("高斯过程模型已加载。")
-    except FileNotFoundError:
-        gp_model = None
-        print("未找到高斯过程模型，继续使用未校正模型。")
-
+    gp_model = "gp_model_final.pkl"
     # 预训练的 2R2C 模型参数
-    params = [6176805.99725779, 9987082.48439311, 3452420.56892008, 1671112.44674421]
+    params = [0.0028, 0.054, 190679918.65329826]
+    wall_RC_params = pd.read_csv('rc_params_curvefit.csv', index_col=0)
+    wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
+                         'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
+                         'TSI_S11', 'TSI_S12', 'TSI_S13',
+                         'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
 
     # 初始化 ThermalModel 类
-    thermal_model = ThermalModel(params=params, gp_model=gp_model)
+    thermal_model = ThermalModel(params, wall_RC_params, gp_model)
 
     # 输入参数
     Tamb_t = 15  # 当前环境温度
+    Tstar_t = 22
     Tin_t = 22  # 当前室内温度
     Qin_t = 100  # 内部热负荷
     vent_flow = 0.2  # 通风质量流量
     step_pre = 0.5  # 时间步长
+    Twall_t_dict = {}
+    for wall in wall_temp_columns:
+        Twall_t_dict[wall] = Tin_t
 
     # 执行预测
-    Tin_t1, Twall_t1, Q_zone, Q_ahu, Q_space_heat, Q_space_cool = thermal_model.predict(
-        Tamb_t=Tamb_t,
-        Tin_t=Tin_t,
-        Qin_t=Qin_t,
-        step_pre=step_pre,
-        vent_flow=vent_flow
-    )
+    Tin_t1, Twall_t1_dict, T_vent, Qzone_t, Qahu_t, Qspace_t = thermal_model.predict_next(Tamb_t, Tin_t, Twall_t_dict,
+                                                                                          Qin_t, step_pre, vent_flow,
+                                                                                          Tsp_high=24, Tsp_low=21)
 
     # 输出预测结果
     print(f"下一时刻室温 Tin_t+1: {Tin_t1:.2f}°C")
-    print(f"下一时刻墙体温度 Twall_t+1: {Twall_t1:.2f}°C")
-    print(f"室内热平衡负荷 Q_zone: {Q_zone:.2f} W")
-    print(f"AHU 负荷 Q_ahu: {Q_ahu:.2f} W")
-    print(f"空间加热负荷 Q_space_heat: {Q_space_heat:.2f} W")
-    print(f"空间制冷负荷 Q_space_cool: {Q_space_cool:.2f} W")
+    print("下一时刻墙体温度 Twall_t1:")
+    for wall, temp in Twall_t1_dict.items():
+        print(f"  {wall}: {temp:.2f}°C")
+    print(f"室内热平衡负荷 Q_zone: {Qzone_t:.2f} W")
+    print(f"AHU 负荷 Q_ahu: {Qahu_t:.2f} W")
+    print(f"空间负荷 Q_space: {Qspace_t:.2f} W")
+
+
+
+
