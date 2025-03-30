@@ -13,3 +13,4 @@ class DataManager:
         ev_data = pd.read_csv(self.ev_file)
         pv_data = pd.read_csv(self.pv_file)
         return weather_data, ev_data, pv_data
+

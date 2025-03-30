@@ -1,4 +1,4 @@
-from thermal_model_nostar import ThermalModel
+from thermal_model import ThermalModel
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
@@ -28,7 +28,7 @@ def load_real_data(file_path):
     df = pd.read_csv(file_path)
 
     # 确认时间间隔为 0.5 小时，生成时间序列 (小时)
-    time = df['TIME'].values * 0.5  # 原始数据以 0.5 为步长
+    time = df['TIME'].values  # 原始数据以 0.5 为步长
 
     # 室外温度 (°C)
     external_temp = df['Tout'].values
@@ -224,50 +224,63 @@ def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_li
     - gp_model: 训练好的高斯过程模型
     """
     # 使用 predict_period 进行预测
+    time_cur = 0
     Tin_list, Twall_dict_list, Qzone_list, Qahu_list, Qspace_list, _ = thermal_model.predict_peiod(
         time_horizon,
         Tamb_t_list,
         Tin_t_list[0],
         Qin_t_list,
         step_pre,
-        vent_flow
+        vent_flow,
+        time_cur
     )
 
     # 构建时间序列
-    time_hour = np.arange(len(Qspace_list)) * step_pre / 3600
+    time_hour = np.arange(len(Qspace_list)) * step_pre / 3600 #时间单位 s -> hour
     line_len = min(len(time_hour), len(Q_space_measured), len(Qspace_list), int(1e3))  # 输入输出预测的长度，用一个很大的表示全序列
     # print(len(Q_space_measured))
     # print(len(Qspace_list))
 
-    visualize_before_correction(time_hour[:line_len], Q_space_measured[:line_len], Qspace_list[:line_len], iteration)
-    visualize_before_correction(time_hour[:line_len], measured_temp[:line_len], Tin_list[:line_len], iteration)
+    start_index = int(1e3)
+    visualize_before_correction(time_hour[start_index : start_index + line_len],
+                                Q_space_measured[start_index : start_index + line_len],
+                                Qspace_list[start_index : start_index + line_len], iteration)
+    visualize_before_correction(time_hour[start_index : start_index + line_len],
+                                measured_temp[start_index : start_index + line_len],
+                                Tin_list[start_index : start_index + line_len], iteration)
 
     if mode == "train":
 
         # 进行高斯过程校正
         corrected_Q, gp_model = gaussian_process_correction(
-            time_hour[:line_len],
-            Tamb_t_list[:line_len],  # 确保长度匹配
-            Q_space_measured[:line_len],  # 实测热负荷
-            np.array(Qspace_list[:line_len]),  # 预测热负荷
+            time_hour[start_index : start_index + line_len],
+            Tamb_t_list[start_index : start_index + line_len],  # 确保长度匹配
+            Q_space_measured[start_index : start_index + line_len],  # 实测热负荷
+            np.array(Qspace_list[start_index : start_index + line_len]),  # 预测热负荷
             iteration,
             initial_downsample_rate=1,
             max_retries=10
         )
-        visualize(time_hour[:line_len], Q_space_measured[:line_len], Qspace_list[:line_len], corrected_Q[:line_len],
+        visualize(time_hour[start_index : start_index + line_len],
+                  Q_space_measured[start_index : start_index + line_len],
+                  Qspace_list[start_index : start_index + line_len],
+                  corrected_Q,
                   iteration)
         return corrected_Q, gp_model, Qspace_list
 
     else:
         corrected_Q = gaussian_process_apply(
-            time_hour[:line_len],
-            Tamb_t_list[:line_len],  # 确保长度匹配
-            np.array(Qspace_list[:line_len]),  # 预测热负荷
+            time_hour[start_index : start_index + line_len],
+            Tamb_t_list[start_index : start_index + line_len],  # 确保长度匹配
+            np.array(Qspace_list[start_index : start_index + line_len]),  # 预测热负荷
             iteration
         )
 
         # 可视化结果
-        visualize(time_hour[:line_len], Q_space_measured[:line_len], Qspace_list[:line_len], corrected_Q[:line_len],
+        visualize(time_hour[start_index: start_index + line_len],
+                  Q_space_measured[start_index: start_index + line_len],
+                  Qspace_list[start_index: start_index + line_len],
+                  corrected_Q,
                   iteration)
 
         return corrected_Q, None, Qspace_list
@@ -291,7 +304,7 @@ if __name__ == "__main__":
 
     # 设置预测参数
     time_horizon = len(time)  # 预测时间长度
-    step_pre = 0.5 * 3600  # 时间步长（小时）
+    step_pre = 0.5 * 3600  # 时间步长 秒
 
     # 准备输入数据
     Tamb_t_list = external_temp

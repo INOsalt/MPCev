@@ -4,7 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1710c337-0b5e-427c-b303-3ea0fa2bb157" name="Changes" comment="" />
+    <list default="true" id="1710c337-0b5e-427c-b303-3ea0fa2bb157" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/HVAC_power.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MPC.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/control.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/param_manage.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/power_demand.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data_management.py" beforeDir="false" afterPath="$PROJECT_DIR$/data_management.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gp_correction_result.py" beforeDir="false" afterPath="$PROJECT_DIR$/gp_correction_result.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/thermal_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/thermal_model.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -33,7 +43,9 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Python.HVAC_power.executor": "Run",
     "Python.figure.executor": "Run",
+    "Python.gp_correction_result.executor": "Debug",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "salt",
@@ -63,5 +75,16 @@
       <updated>1732539106905</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gp_correction_result.py</url>
+          <line>148</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

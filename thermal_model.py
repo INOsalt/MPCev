@@ -31,7 +31,7 @@ class ThermalModel:
         - Tamb_t: 当前环境温度 (°C)
         - Tin_t: 当前室内温度 (°C)
         - Qin_t: 当前内部热负荷 (W)
-        - step_pre: 当前预测的时间步长 (小时)
+        - step_pre: 当前预测的时间步长 (s)
         - vent_flow: 通风质量流量 (kg/s)
 
         返回:
@@ -42,7 +42,7 @@ class ThermalModel:
         - Q_space_heat: 空间加热负荷 (W)
         - Q_space_cool: 空间制冷负荷 (W)
         """
-        self.dt = step_pre  # 设置时间步长
+        self.dt = step_pre  # 设置时间步长 单位秒
 
         Qwall_t = 0
         Twall_t1_dict = {}
@@ -110,7 +110,30 @@ class ThermalModel:
         else:
             return -1.333 * Tin_t + 49 - 0.5
 
-    def predict_peiod(self, time_horzion, Tamb_t_list, Tin_t, Qin_t_list, step_pre, vent_flow):
+    def predict_peiod(self, time_horzion, Tamb_t_list, Tin_t, Qin_t_list, step_pre, vent_flow, time_now): #当前时刻
+        """
+        预测一段时间的
+        参数:
+        - time_horzion：时间区域（整数）
+        - Tamb_t: 当前环境温度 (°C)
+        - Tin_t: 当前室内温度 (°C)
+        - Qin_t: 当前内部热负荷 (W)
+        - step_pre: 当前预测的时间步长 (s，需要换算为小时)
+        - vent_flow: 通风质量流量 (kg/s)
+        - time_now：当前时刻（整数)
+
+        返回:
+        - Tin_t1: 下一时刻室内温度 (校正后的) (°C)
+        - Twall_t1: 下一时刻墙体温度 (°C)
+        - Q_zone: 室内热平衡负荷 (W)
+        - Q_ahu: AHU 负荷 (W)
+        - Q_space_heat: 空间加热负荷 (W)
+        - Q_space_cool: 空间制冷负荷 (W)
+        """
+
+
+        step_size = step_pre / 3600  # 将步长从秒转换为小时
+
         Twall_t_dict_0 = {}
         for wall in self.wall_temp_columns:
             Twall_t_dict_0[wall] = Tin_t
@@ -139,7 +162,7 @@ class ThermalModel:
             gp_model = load(self.gp_model_name)
             print("高斯过程模型已加载。")
             # 构建输入特征
-            time = np.arange(len(Tin_t_list)) * step_pre
+            time = np.arange(int(time_now), int(time_now) + time_horzion * step_size, step_size) #步长小时的时间数组
             external_temp = np.array(Tamb_t_list)
             X = np.column_stack((time, external_temp))
 
@@ -150,7 +173,7 @@ class ThermalModel:
             gp_model = None
             Qspace_t_list_corrected = Qspace_t_list
             print("未找到高斯过程模型，继续使用未校正模型。")
-            return Tin_t_list, Twall_t_dict_list, Qzone_t_list, Qahu_t_list, Qspace_t_list, Qspace_t_list_corrected
+        return Tin_t_list, Twall_t_dict_list, Qzone_t_list, Qahu_t_list, Qspace_t_list, Qspace_t_list_corrected
 
 
 # 主函数，仅在直接运行脚本时执行
