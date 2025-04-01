@@ -237,11 +237,11 @@ def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_li
 
     # 构建时间序列
     time_hour = np.arange(len(Qspace_list)) * step_pre / 3600 #时间单位 s -> hour
-    line_len = min(len(time_hour), len(Q_space_measured), len(Qspace_list), int(1e3))  # 输入输出预测的长度，用一个很大的表示全序列
+    line_len = min(len(time_hour), len(Q_space_measured), len(Qspace_list), int(1e10))  # 输入输出预测的长度，用一个很大的表示全序列
     # print(len(Q_space_measured))
     # print(len(Qspace_list))
 
-    start_index = int(1e3)
+    start_index = int(0)
     visualize_before_correction(time_hour[start_index : start_index + line_len],
                                 Q_space_measured[start_index : start_index + line_len],
                                 Qspace_list[start_index : start_index + line_len], iteration)
