@@ -24,27 +24,39 @@ class HVACSimulator:
         self.A = np.pi * (self.D_tank / 2) ** 2
         self.A_cond = self.A
 
-    def simulate_tank_at_t(self, t, T_top, T_middle, T_bottom, Demand_series, T_amb_series, state_prev):
+    def simulate_tank_at_t(self, current_time, T_top, T_middle, T_bottom, Demand, T_amb, state_prev, chiller_type):
         max_micro_steps = self.dt_step // self.dt_micro
-        Demand = Demand_series[t]
-        T_amb = T_amb_series[t]
         current_state = state_prev
 
-        m_dot_bottom = 11.2 * 3600 / (pm.CP * 4.99) / 3600 if current_state == 1 else 0
-        m_dot_top = Demand / (pm.CP * 5) / 3600
-        delta_TAC = (Demand / 1920 / pm.CP if Demand > 0 else 5) if current_state == 1 else 0
-        delta_User = 5 if Demand > 0 else 0
+        if chiller_type == 'AC':
+            m_dot_bottom = pm.AC_Cap/ (pm.CP * pm.delta_TAC_nom)  if current_state == 1 else 0
+            m_dot_top = Demand / (pm.CP * pm.delta_TAC_USER_nom) / 3600
+            delta_Tchiller = (Demand / m_dot_bottom / pm.CP if Demand > 0 else 5) if current_state == 1 else 0
+            delta_User = pm.delta_TAC_USER_nom if Demand > 0 else 0
+            T_THRESHOLD_ON = pm.T_THRESHOLD_AC_ON
+            T_THRESHOLD_OFF = pm.T_THRESHOLD_AC_OFF
+        else: #chiller_type == 'SC' :
+            m_dot_bottom = pm.SC_Cap / (pm.CP * pm.delta_TSC_nom)  if current_state == 1 else 0
+            m_dot_top = Demand / (pm.CP * pm.delta_TSC_USER_nom) / 3600
+            delta_Tchiller = (Demand / m_dot_bottom / pm.CP if Demand > 0 else 2) if current_state == 1 else 0
+            delta_User = pm.delta_TSC_USER_nom if Demand > 0 else 0
+            T_THRESHOLD_ON = pm.T_THRESHOLD_SC_ON
+            T_THRESHOLD_OFF = pm.T_THRESHOLD_SC_OFF
 
-        if self.tanktem_data is not None and t > 0 and t <= len(self.tanktem_data):
-            T_top = self.tanktem_data['TankAC1'].iloc[t - 1]
-            T_middle = self.tanktem_data['TankAC3'].iloc[t - 1]
-            T_bottom = self.tanktem_data['TankAC5'].iloc[t - 1]
+
+        if self.tanktem_data is not None and current_time > 0 and current_time <= len(self.tanktem_data):
+            if chiller_type == 'AC':
+                T_top = self.tanktem_data['TankAC1'].iloc[current_time - 1]
+                T_middle = self.tanktem_data['TankAC3'].iloc[current_time - 1]
+                T_bottom = self.tanktem_data['TankAC5'].iloc[current_time - 1]
+
+            else:
+                T_top = self.tanktem_data['TankSC1'].iloc[current_time - 1]
+                T_middle = self.tanktem_data['TankSC3'].iloc[current_time - 1]
+                T_bottom = self.tanktem_data['TankSC5'].iloc[current_time - 1]
+
 
         for _ in range(max_micro_steps):
-            dT_top = (m_dot_top * pm.CP * (T_bottom + delta_User - T_top) +
-                      m_dot_bottom * pm.CP * (T_middle - T_top) +
-                      pm.K * self.A_cond * (T_middle - T_top) / pm.L -
-                      pm.U * self.A * (T_top - T_amb)) / self.c_node
             dT_top = (m_dot_top * pm.CP * (T_bottom + delta_User - T_top) +
                       m_dot_bottom * pm.CP * (T_middle - T_top) +
                       pm.K * self.A_cond * (T_middle - T_top) / pm.L -
@@ -55,7 +67,7 @@ class HVACSimulator:
                          pm.K * self.A_cond * (T_top - T_middle + T_bottom - T_middle) / pm.L) / self.c_node
 
             dT_bottom = (m_dot_top * pm.CP * (T_middle - T_bottom) +
-                         m_dot_bottom * pm.CP * ((T_top - delta_TAC) - T_bottom) +
+                         m_dot_bottom * pm.CP * ((T_top - delta_Tchiller) - T_bottom) +
                          pm.K * self.A_cond * (T_middle - T_bottom) / pm.L -
                          pm.U * self.A * (T_bottom - T_amb)) / self.c_node
 
@@ -64,9 +76,9 @@ class HVACSimulator:
             T_bottom += dT_bottom * self.dt_micro
 
             # 控制状态更新
-            if current_state == 1 and (T_top - pm.T_THRESHOLD_OFF) < 0:
+            if current_state == 1 and (T_top - T_THRESHOLD_OFF) < 0:
                 current_state = 0
-            elif current_state == 0 and (T_top - pm.T_THRESHOLD_OFF) >= (pm.T_THRESHOLD_ON - pm.T_THRESHOLD_OFF):
+            elif current_state == 0 and (T_top - T_THRESHOLD_OFF) >= (T_THRESHOLD_ON - T_THRESHOLD_OFF):
                 current_state = 1
 
         return T_top, T_middle, T_bottom, current_state
@@ -91,21 +103,25 @@ class HVACSimulator:
             y_inv += coef_dict.get(key, 0.0) * value
         return 1 / y_inv if y_inv != 0 else np.nan
 
-    def calculate_hvac_power(self, t, T_top, T_middle, T_bottom, AC_state,
-                              Qe_tp_AC, Qe_tp_SC, Demand_series, Tout_series):
-        Tout_t = Tout_series[t]
-        T_top, T_middle, T_bottom, AC_state = self.simulate_tank_at_t(
-            t, T_top, T_middle, T_bottom, Demand_series, Tout_series, AC_state
+    def calculate_hvac_power(self, current_time, T_AC_top, T_AC_middle, T_AC_bottom, AC_state,
+                             T_SC_top, T_SC_middle, T_SC_bottom, SC_state,
+                             Qe_tp_AC, Qe_tp_SC, Tout):
+        Tout_t = Tout
+        T_AC_top, T_AC_middle, T_AC_bottom, AC_state = self.simulate_tank_at_t(
+            current_time, T_AC_top, T_AC_middle, T_AC_bottom, Qe_tp_AC, Tout, AC_state, 'AC'
+        )
+        T_SC_top, T_SC_middle, T_SC_bottom, SC_state = self.simulate_tank_at_t(
+            current_time, T_SC_top, T_SC_middle, T_SC_bottom, Qe_tp_SC, Tout, SC_state, 'SC'
         )
 
         COP_AC = self.predict_cop(Qe_tp_AC, Tout_t, self.coef_ac_path)
         COP_SC = self.predict_cop(Qe_tp_SC, Tout_t, self.coef_sc_path)
 
-        ACpower = AC_state * Qe_tp_AC / COP_AC if COP_AC and not np.isnan(COP_AC) else 0
+        ACpower = Qe_tp_AC / COP_AC if COP_AC and not np.isnan(COP_AC) else 0
         SCpower = Qe_tp_SC / COP_SC if COP_SC and not np.isnan(COP_SC) else 0
         HVAC_power = ACpower + SCpower
 
-        return ACpower, SCpower, HVAC_power, T_top, T_middle, T_bottom, AC_state
+        return ACpower, SCpower, HVAC_power, T_AC_top, AC_state, T_SC_top, SC_state
 
 
 def main():
@@ -144,6 +160,8 @@ def main():
     # 初始温度与状态
     AC_T_top = AC_T_middle = AC_T_bottom = 24.0
     AC_state = 0
+    SC_T_top = SC_T_middle = SC_T_bottom = 24.0
+    SC_state = 0
 
     # === 结果存储 ===
     AC_T_top_all, ACsign_list = [], []
@@ -156,10 +174,11 @@ def main():
         Qe_tp_SC = SC_Demand_series[t]
         Tout_t = Tout_series[t]
 
-        ACpower, SCpower, _, AC_T_top, AC_T_middle, AC_T_bottom, AC_state = simulator.calculate_hvac_power(
+        ACpower, SCpower, HVAC_power, T_AC_top, AC_state, T_SC_top, SC_state = simulator.calculate_hvac_power(
             t, AC_T_top, AC_T_middle, AC_T_bottom, AC_state,
+            SC_T_top, SC_T_middle, SC_T_bottom, SC_state,
             Qe_tp_AC, Qe_tp_SC,
-            AC_Demand_series, Tout_series
+            Tout_t
         )
 
         COP_pred_AC = simulator.predict_cop(Qe_tp_AC, Tout_t, simulator.coef_ac_path)

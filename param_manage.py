@@ -10,9 +10,19 @@ U = 1.08 / 3600   # 热损系数
 K = 0.58 / 1000   # 导热系数
 L = 0.5           # 节间距离
 
+#Chiller参数
+AC_Cap = 11.2 * 3600 #KJPH
+delta_TAC_nom = 4.99 #度
+delta_TAC_USER_nom = 5
+SC_Cap = 26.3 * 3600
+delta_TSC_nom = 2 #度
+delta_TSC_USER_nom = 2
+
 # 控制策略参数
-T_THRESHOLD_OFF = 5.1
-T_THRESHOLD_ON = 7.0
+T_THRESHOLD_AC_OFF = 5.1
+T_THRESHOLD_AC_ON = 7.0
+T_THRESHOLD_SC_OFF = 13.1
+T_THRESHOLD_SC_ON = 15
 
 # 计算步长
 DT_MICRO = 450

@@ -10,13 +10,16 @@ from people_behave import equip  # 导入设备用电行为模块
 
 
 class power_demand:
-    def __init__(self):
+    def __init__(self,current_time, step, horizon):
         """
         热力能源系统仿真器
         :param rc_params_path: 墙体RC参数文件路径
         :param model_params: 核心模型参数列表
         :param gp_model_name: 高斯过程模型名称
         """
+        self.current_time = current_time
+        self.step = step
+        self.horizon = horizon
 
         # 结果缓存区
         self.prediction_results = None
@@ -26,7 +29,7 @@ class power_demand:
         self.sc_power_list = []
         self.total_power_list = []
 
-    def chiller_power(self, prediction_hours):
+    def chiller_power(self):
         """
         执行完整仿真流程
         :param prediction_hours: 预测时长（小时）
@@ -44,13 +47,13 @@ class power_demand:
         # 执行预测并缓存结果
         Tin_t_list, Twall_t_dict_list, Qzone_t_list, Qahu_t_list, Qspace_t_list, Qspace_t_list_corrected \
             = self.thermal_model.predict_peiod(
-            time_horzion,
+            self.horizon,
             Tamb_t_list,
             Tin_t,
             Qin_t_list,
             step_pre,
             vent_flow,
-            time_now
+            self.current_time
         )
 
         # === 数据读取与预处理 ===
@@ -126,27 +129,6 @@ class power_demand:
             self.sc_power_list,
             self.equip_power_list
         )
-
-
-    def _predict_cop(Qe, Tout, coef_path):
-        if Qe == 0:
-            return np.nan
-        features = {
-            '1/Qe': 1 / Qe,
-            'Qe': Qe,
-            'Tcwi/Qe': Tout / Qe,
-            'Tcwi^2/Qe': (Tout ** 2) / Qe,
-            'Tcwi': Tout,
-            'Qe*Tcwi': Qe * Tout,
-            'Tcwi^2': Tout ** 2,
-            'Qe*Tcwi^2': Qe * Tout ** 2
-        }
-        coef_df = pd.read_csv(coef_path)
-        coef_dict = dict(zip(coef_df['Feature'], coef_df['Coefficient']))
-        y_inv = coef_dict.get('Intercept', 0.0)
-        for key, value in features.items():
-            y_inv += coef_dict.get(key, 0.0) * value
-        return 1 / y_inv
 
 
     def _generate_total_demand(self):

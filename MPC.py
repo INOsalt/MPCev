@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from power_demand import total_power_demand
+from power_demand import power_demand
 from power_generation import total_power_generation
 from EV_demand import total_EV
 from docplex.mp.model import Model
