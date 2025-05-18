@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
 from standard_class import StandardizedGP
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error,r2_score
 
 
 def load_real_data(file_path):
@@ -26,6 +26,7 @@ def load_real_data(file_path):
     """
     # 读取数据
     df = pd.read_csv(file_path)
+    df.columns = df.columns.str.strip()
 
     # 确认时间间隔为 0.5 小时，生成时间序列 (小时)
     time = df['TIME'].values  # 原始数据以 0.5 为步长
@@ -34,13 +35,22 @@ def load_real_data(file_path):
     external_temp = df['Tout'].values
 
     # 墙温
-    # wall_temp_columns = ['TSI_S4', 'TSI_S6',#roof
-    #                  'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',#window
-    #                  'TSI_S11', 'TSI_S12', 'TSI_S13', 'TSI_S14']#'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
-    # Twall_t_dict = {}
-    # for wall in wall_temp_columns:
-    #     Twall_t_dict[wall] = df[wall].values
+    wall_temp_columns = ['TSI_S4', 'TSI_S6',#roof
+                     'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',#window
+                     'TSI_S11', 'TSI_S12', 'TSI_S13', 'TSI_S14']#'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
 
+    Twall_t_dict = {}
+    # 获取数组长度（假设至少有一个键）
+    n = len(external_temp)
+
+    for i in range(n):
+        Twall_t_dict[i] = {}
+        for wall in wall_temp_columns:
+            # 直接从 DataFrame 中提取该列的第 i 个值
+            Twall_t_dict[i][wall] = df[wall].values[i]
+
+    #泥土
+    T_soil_list = df['T_Soil'].values
     # 空间热负荷 (kJ/hr -> W)
     # 注意: 1 kJ/hr = 0.2778 W
     Q_heat = df['QHEAT_Zone1'].values * 0.2778
@@ -59,7 +69,7 @@ def load_real_data(file_path):
     # 实测室内温度 (°C)
     measured_temp = df['TAIR_Zone1'].values
 
-    return time, external_temp, Q_heat, Q_cool, Q_in, vent_temp, vent_flow, measured_temp, Q_space
+    return time, external_temp, Q_heat, Q_cool, Q_in, vent_temp, vent_flow, measured_temp, Q_space,T_soil_list,Twall_t_dict
 
 
 def gaussian_process_correction(time, external_temp, measured, predicted, iteration,
@@ -205,7 +215,7 @@ def visualize(time, measured_Q, predicted_Q, corrected_Q, iteration):
 
 
 def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_list, Qin_t_list, step_pre, vent_flow,
-                              Q_space_measured, iteration, mode="train"):
+                              Q_space_measured, iteration, Tsoil_t_list, Twall_t_dict, mode="train"):
     """
     使用 predict_period 进行预测并训练高斯过程校正模型
 
@@ -232,7 +242,9 @@ def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_li
         Qin_t_list,
         step_pre,
         vent_flow,
-        time_cur
+        time_cur,
+        Tsoil_t_list,
+        Twall_t_dict[0]
     )
 
     # 构建时间序列
@@ -248,6 +260,14 @@ def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_li
     visualize_before_correction(time_hour[start_index : start_index + line_len],
                                 measured_temp[start_index : start_index + line_len],
                                 Tin_list[start_index : start_index + line_len], iteration)
+
+    # 计算和打印误差指标
+    r2_Tin = r2_score(measured_temp[start_index : start_index + line_len], Tin_list[start_index : start_index + line_len])
+
+    # 打印结果
+
+    print(f"R² Tin: {r2_Tin:.4f}")
+
 
     if mode == "train":
 
@@ -290,17 +310,18 @@ def train_gp_correction_for_Q(thermal_model, time_horizon, Tamb_t_list, Tin_t_li
 if __name__ == "__main__":
     # 加载数据
     file_path = 'RC.csv'
-    time, external_temp, Q_heat, Q_cool, Q_in, vent_temp, vent_flow, measured_temp, Q_space = load_real_data(file_path)
+    time, external_temp, Q_heat, Q_cool, Q_in, vent_temp, vent_flow, measured_temp, Q_space,Tsoil_t_list,Twall_t_dict = load_real_data(file_path)
 
     # 初始化模型参数
     # params = [0.0001, 0.001999, 0.00062838, 40723395.97479104, 200671880.13560498] #self.Rstar_win, self.Rstar_wall, self.Rair, self.Cstar, self.C_air
     params = [0.0028, 0.054, 190679918.65329826]
     # [0.002436990358271271, 0.019999999999999997, 0.00010728150932535978, 218600129.0216549, 16773920.364684984]#28432390.466448814
-    wall_RC_params = pd.read_csv('rc_params_curvefit.csv', index_col=0)
+    # wall_RC_params = pd.read_csv('rc_params_curvefit_top.csv', index_col=0)
+    wall_RC_params = 'rc_params_curvefit'
 
     gp_model_name = "None"
     # 初始化模型
-    thermal_model = ThermalModel(params, wall_RC_params, gp_model_name)
+    thermal_model = ThermalModel(params, wall_RC_params, gp_model_name,'middle')
 
     # 设置预测参数
     time_horizon = len(time)  # 预测时间长度
@@ -324,6 +345,8 @@ if __name__ == "__main__":
             vent_flow_value,
             Q_space,
             iteration,
+            Tsoil_t_list,
+            Twall_t_dict,
             mode="apply" #train是训练模式
         )
 
@@ -331,18 +354,23 @@ if __name__ == "__main__":
         mse_before = mean_squared_error(Q_space[:len(predicted_Q)], predicted_Q)
         mse_after = mean_squared_error(Q_space[:len(corrected_Q)], corrected_Q)
 
-        # Calculate and print error metrics
+        r2_before = r2_score(Q_space[:len(predicted_Q)], predicted_Q)
+        r2_after = r2_score(Q_space[:len(corrected_Q)], corrected_Q)
+
+        # 打印结果
         print(f"Iteration: {iteration}")
         print(f"MSE before correction: {mse_before:.2f}")
         print(f"MSE after correction: {mse_after:.2f}")
-        print(f"Improvement: {((mse_before - mse_after) / mse_before * 100):.2f}%")
-        # 写入到文本文件
-        file_path = "gp_correction_results.txt"  # 你可以根据需要修改文件路径
-        with open(file_path, "a") as f:  # "a" 模式确保文件不存在时会创建，且内容追加到文件末尾
-            f.write(f"Iteration: {iteration}\n")
-            f.write(f"MSE before correction: {mse_before:.2f}\n")
-            f.write(f"MSE after correction: {mse_after:.2f}\n")
-            f.write(f"Improvement: {((mse_before - mse_after) / mse_before * 100):.2f}%\n")
+        print(f"R² before correction: {r2_before:.4f}")
+        print(f"R² after correction: {r2_after:.4f}")
+        print(f"Improvement (MSE): {((mse_before - mse_after) / mse_before * 100):.2f}%")
+        # # 写入到文本文件
+        # file_path = "gp_correction_results.txt"  # 你可以根据需要修改文件路径
+        # with open(file_path, "a") as f:  # "a" 模式确保文件不存在时会创建，且内容追加到文件末尾
+        #     f.write(f"Iteration: {iteration}\n")
+        #     f.write(f"MSE before correction: {mse_before:.2f}\n")
+        #     f.write(f"MSE after correction: {mse_after:.2f}\n")
+        #     f.write(f"Improvement: {((mse_before - mse_after) / mse_before * 100):.2f}%\n")
 
 
 

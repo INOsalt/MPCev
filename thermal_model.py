@@ -5,7 +5,7 @@ from joblib import load
 
 
 class ThermalModel:
-    def __init__(self, params, wall_RC_params, gp_model_name):
+    def __init__(self, params, wall_RC_params, gp_model_name, floor_type):
         """
         初始化 ThermalModel 类
 
@@ -13,17 +13,19 @@ class ThermalModel:
         - params: 预训练的 2R2C 模型参数 [R_ext_wall, R_zone_wall, C_wall, C_zone]
         - gp_model: 高斯过程模型，用于室温预测误差校正
         """
+        self.floor_type = floor_type
         self.gp_model_name = gp_model_name
         self.c_air = 1005  # 空气比热容 (J/kg·K)
         self.dt = None  # 时间步长将在后续设置
         self.Rstar_win, self.Rstar_wall, self.C_air = params
-        self.wall_RC = wall_RC_params
+        filename = f"{wall_RC_params}_{floor_type}.csv"
+        self.wall_RC = pd.read_csv(filename, index_col=0)
         self.wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
                                   'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
                                   'TSI_S11', 'TSI_S12', 'TSI_S13',
                                   'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
 
-    def predict_next(self, Tamb_t, Tin_t, Twall_t_dict, Qin_t, step_pre, vent_flow, Tsp_high=24, Tsp_low=21):
+    def predict_next(self, Tamb_t, Tin_t, Twall_t_dict, Qin_t, step_pre, vent_flow, Tsoil_t,Tsp_high=24, Tsp_low=21):
         """
         预测下一时刻的热负荷和温度
 
@@ -49,8 +51,16 @@ class ThermalModel:
         for wall in self.wall_temp_columns:
             Twall_t = Twall_t_dict[wall]
             Rex, Cwall = self.wall_RC.loc[wall, ['Rex', 'C']]
-            if wall in ['TSI_S4', 'TSI_S6']:
-                Tamb_t1 = Twall_t
+            if wall in ['TSI_S4']:#roof
+                if self.floor_type == 'top':
+                    Tamb_t1 = Tamb_t
+                else:
+                    Tamb_t1 = Twall_t
+            elif wall in ['TSI_S6']:#floor
+                if self.floor_type == 'bottom':
+                    Tamb_t1 = Tsoil_t
+                else:
+                    Tamb_t1 = Twall_t
             else:
                 Tamb_t1 = Tamb_t
             if wall in ['TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10']:
@@ -110,7 +120,7 @@ class ThermalModel:
         else:
             return -1.333 * Tin_t + 49 - 0.5
 
-    def predict_peiod(self, time_horzion, Tamb_t_list, Tin_t, Qin_t_list, step_pre, vent_flow, time_now): #当前时刻
+    def predict_peiod(self, time_horzion, Tamb_t_list, Tin_t, Qin_t_list, step_pre, vent_flow, time_now,Tsoil_t_list,Twall_t_dict_0): #当前时刻
         """
         预测一段时间的
         参数:
@@ -134,9 +144,10 @@ class ThermalModel:
 
         step_size = step_pre / 3600  # 将步长从秒转换为小时
 
-        Twall_t_dict_0 = {}
-        for wall in self.wall_temp_columns:
-            Twall_t_dict_0[wall] = Tin_t
+        # if time_now == 0:
+        #     for wall in self.wall_temp_columns:
+        #         Twall_t_dict_0[wall] = Tin_t
+
         Tin_t_list = [Tin_t]
         Qzone_t_list = [0]
         Twall_t_dict_list = [Twall_t_dict_0]
@@ -145,10 +156,11 @@ class ThermalModel:
         for i in range(time_horzion):  # time horizon步长
             Tin_t = Tin_t_list[i]
             Tamb_t = Tamb_t_list[i]
+            Tsoil_t = Tsoil_t_list[i]
             Qin_t = Qin_t_list[i]
             Twall_t_dict = Twall_t_dict_list[i]
             Tin_t1, Twall_t1_dict, T_vent, Qzone_t0, Qahu_t0, Qspace_t0 = self.predict_next(Tamb_t, Tin_t, Twall_t_dict,
-                                                                                            Qin_t, step_pre, vent_flow)
+                                                                                            Qin_t, step_pre, vent_flow, Tsoil_t)
             Tin_t_list.append(Tin_t1)
             Twall_t_dict_list.append(Twall_t1_dict)
             if i != 0:
@@ -190,11 +202,12 @@ if __name__ == "__main__":
                          'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
 
     # 初始化 ThermalModel 类
-    thermal_model = ThermalModel(params, wall_RC_params, gp_model)
+    thermal_model = ThermalModel(params, wall_RC_params, gp_model,'middle')
 
     # 输入参数
     Tamb_t = 15  # 当前环境温度
     Tstar_t = 22
+    T_soil = 22
     Tin_t = 22  # 当前室内温度
     Qin_t = 100  # 内部热负荷
     vent_flow = 0.2  # 通风质量流量
@@ -205,7 +218,7 @@ if __name__ == "__main__":
 
     # 执行预测
     Tin_t1, Twall_t1_dict, T_vent, Qzone_t, Qahu_t, Qspace_t = thermal_model.predict_next(Tamb_t, Tin_t, Twall_t_dict,
-                                                                                          Qin_t, step_pre, vent_flow,
+                                                                                          Qin_t, step_pre, vent_flow,T_soil,
                                                                                           Tsp_high=24, Tsp_low=21)
 
     # 输出预测结果

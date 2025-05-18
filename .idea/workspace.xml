@@ -5,14 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1710c337-0b5e-427c-b303-3ea0fa2bb157" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/cplex_test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/HVAC_power.py" beforeDir="false" afterPath="$PROJECT_DIR$/HVAC_power.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MPC.py" beforeDir="false" afterPath="$PROJECT_DIR$/MPC.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/RC.csv" beforeDir="false" afterPath="$PROJECT_DIR$/RC.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data_management.py" beforeDir="false" afterPath="$PROJECT_DIR$/data_management.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/param_manage.py" beforeDir="false" afterPath="$PROJECT_DIR$/param_manage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/power_demand.py" beforeDir="false" afterPath="$PROJECT_DIR$/power_demand.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gp_correction_result.py" beforeDir="false" afterPath="$PROJECT_DIR$/gp_correction_result.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rc_params_curvefit.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/thermal_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/thermal_model.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
