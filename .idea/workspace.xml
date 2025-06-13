@@ -4,7 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1710c337-0b5e-427c-b303-3ea0fa2bb157" name="Changes" comment="" />
+    <list default="true" id="1710c337-0b5e-427c-b303-3ea0fa2bb157" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/initialization/RCmodel/wallRC_Tin_nostar.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/gp_correction.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden_ga.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden_ga2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden_ga_1para.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden_nowalltemp.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/parameter_iden_test.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/thermal_model.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/wallRC_Tin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/wallRC_Tin_2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/initialization/RCmodel/wallRC_Tstar.py" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -33,17 +47,39 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Python.1_MAIN.executor": "Run",
+    "Python.1_TRAIN.executor": "Run",
+    "Python.COP_correction.executor": "Run",
+    "Python.HVAC_power.executor": "Run",
+    "Python.MPC.executor": "Run",
+    "Python.MPC_INPUT.executor": "Run",
+    "Python.MPC_model.executor": "Run",
+    "Python.PV_gen.executor": "Run",
+    "Python.RTPV_data.executor": "Run",
     "Python.figure.executor": "Run",
+    "Python.gp_correction_result.executor": "Run",
+    "Python.initialization.executor": "Run",
+    "Python.initialization_model.executor": "Run",
+    "Python.input_manage.executor": "Run",
+    "Python.param_manage.executor": "Run",
+    "Python.people_behave.executor": "Run",
+    "Python.power_demand.executor": "Run",
+    "Python.test.executor": "Run",
+    "Python.thermal_model.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "salt",
-    "last_opened_file_path": "D:/github/MPCev",
+    "last_opened_file_path": "D:/github/RCmodel",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\github\MPCev" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\github\MPCev" />
+      <recent name="D:\github\MPCev\initialization\BiLSTM" />
     </key>
   </component>
   <component name="SharedIndexes">
@@ -63,5 +99,16 @@
       <updated>1732539106905</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/MPC_model.py</url>
+          <line>204</line>
+          <option name="timeStamp" value="13" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
