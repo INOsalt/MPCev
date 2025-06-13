@@ -2,17 +2,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.linear_model import LinearRegression
+# from sklearn.linear_model import LinearRegression
 import param_manage as pm
 
 
 class HVACSimulator:
-    def __init__(self, dt_step, coef_ac_path, coef_sc_path, tanktem_data=None):
+    def __init__(self, dt_step, coef_ac_path, coef_sc_path):
         self.dt_step = dt_step
         self.dt_micro = pm.DT_MICRO
         self.coef_ac_path = coef_ac_path
         self.coef_sc_path = coef_sc_path
-        self.tanktem_data = tanktem_data
         self._precompute_constants()
 
     def _precompute_constants(self):
@@ -25,7 +24,7 @@ class HVACSimulator:
         self.A_cond = self.A
 
     def simulate_tank_at_t(self, current_time, T_top, T_middle, T_bottom, Demand, T_amb, state_prev, chiller_type):
-        max_micro_steps = self.dt_step // self.dt_micro
+        max_micro_steps = int(self.dt_step // self.dt_micro)
         current_state = state_prev
 
         if chiller_type == 'AC':
@@ -44,16 +43,16 @@ class HVACSimulator:
             T_THRESHOLD_OFF = pm.T_THRESHOLD_SC_OFF
 
 
-        if self.tanktem_data is not None and current_time > 0 and current_time <= len(self.tanktem_data):
-            if chiller_type == 'AC':
-                T_top = self.tanktem_data['TankAC1'].iloc[current_time - 1]
-                T_middle = self.tanktem_data['TankAC3'].iloc[current_time - 1]
-                T_bottom = self.tanktem_data['TankAC5'].iloc[current_time - 1]
-
-            else:
-                T_top = self.tanktem_data['TankSC1'].iloc[current_time - 1]
-                T_middle = self.tanktem_data['TankSC3'].iloc[current_time - 1]
-                T_bottom = self.tanktem_data['TankSC5'].iloc[current_time - 1]
+        # if self.tanktem_data is not None and current_time > 0 and current_time <= len(self.tanktem_data):
+        #     if chiller_type == 'AC':
+        #         T_top = self.tanktem_data['TankAC1'].iloc[current_time - 1]
+        #         T_middle = self.tanktem_data['TankAC3'].iloc[current_time - 1]
+        #         T_bottom = self.tanktem_data['TankAC5'].iloc[current_time - 1]
+        #
+        #     else:
+        #         T_top = self.tanktem_data['TankSC1'].iloc[current_time - 1]
+        #         T_middle = self.tanktem_data['TankSC3'].iloc[current_time - 1]
+        #         T_bottom = self.tanktem_data['TankSC5'].iloc[current_time - 1]
 
 
         for _ in range(max_micro_steps):
@@ -152,9 +151,8 @@ def main():
     # === 初始化模拟器 ===
     simulator = HVACSimulator(
         dt_step=pm.DT_MICRO,
-        coef_ac_path='ACdemandKJPH_BQ_Model_Coefficients.csv',
-        coef_sc_path='SCdemandKJPH_BQ_Model_Coefficients.csv',
-        tanktem_data=tanktem_data
+        coef_ac_path=pm.AC_BQ_Path,
+        coef_sc_path=pm.SC_BQ_Path,
     )
 
     # 初始温度与状态

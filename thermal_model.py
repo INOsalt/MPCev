@@ -1,3 +1,5 @@
+import traceback
+
 import numpy as np
 import pandas as pd
 import joblib
@@ -18,8 +20,10 @@ class ThermalModel:
         self.c_air = 1005  # 空气比热容 (J/kg·K)
         self.dt = None  # 时间步长将在后续设置
         self.Rstar_win, self.Rstar_wall, self.C_air = params
-        filename = f"{wall_RC_params}_{floor_type}.csv"
-        self.wall_RC = pd.read_csv(filename, index_col=0)
+        # 直接将传入的 DataFrame 赋值给 self.wall_RC
+        self.wall_RC = wall_RC_params
+        if not isinstance(self.wall_RC, pd.DataFrame):
+            raise TypeError("参数 'wall_RC_dataframe' 必须是一个 pandas DataFrame 对象。")
         self.wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
                                   'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
                                   'TSI_S11', 'TSI_S12', 'TSI_S13',
@@ -159,8 +163,9 @@ class ThermalModel:
             Tsoil_t = Tsoil_t_list[i]
             Qin_t = Qin_t_list[i]
             Twall_t_dict = Twall_t_dict_list[i]
+            vent_flow_t = vent_flow[i]
             Tin_t1, Twall_t1_dict, T_vent, Qzone_t0, Qahu_t0, Qspace_t0 = self.predict_next(Tamb_t, Tin_t, Twall_t_dict,
-                                                                                            Qin_t, step_pre, vent_flow, Tsoil_t)
+                                                                                            Qin_t, step_pre, vent_flow_t, Tsoil_t)
             Tin_t_list.append(Tin_t1)
             Twall_t_dict_list.append(Twall_t1_dict)
             if i != 0:
@@ -172,10 +177,16 @@ class ThermalModel:
         # 模拟加载高斯过程模型
         try:
             gp_model = load(self.gp_model_name)
-            print("高斯过程模型已加载。")
+            # print("高斯过程模型已加载。")
             # 构建输入特征
-            time = np.arange(int(time_now), int(time_now) + time_horzion * step_size, step_size) #步长小时的时间数组
+            time = np.arange(int(time_now), int(time_now) + time_horzion * step_size, step_size)  # 步长小时的时间数组
             external_temp = np.array(Tamb_t_list)
+            # 检查并修正 time 数组的长度，使其与 external_temp 数组的长度一致
+            if len(time) > len(external_temp):
+                time = time[:len(external_temp)]  # 截断 time 数组，移除最后一个元素
+            elif len(external_temp) > len(time):
+                external_temp = external_temp[:len(time)]
+
             X = np.column_stack((time, external_temp))
 
             # 使用模型预测校正值
@@ -185,50 +196,55 @@ class ThermalModel:
             gp_model = None
             Qspace_t_list_corrected = Qspace_t_list
             print("未找到高斯过程模型，继续使用未校正模型。")
+            # --- 新增这部分来打印完整的Traceback ---
+            print("--- 以下是完整的错误追溯信息 ---")
+            traceback.print_exc()
+            print("---------------------------------")
+            # -----------------------------------------
         return Tin_t_list, Twall_t_dict_list, Qzone_t_list, Qahu_t_list, Qspace_t_list, Qspace_t_list_corrected
 
 
-# 主函数，仅在直接运行脚本时执行
-if __name__ == "__main__":
-    from joblib import load
-
-    gp_model = "gp_model_final.pkl"
-    # 预训练的 2R2C 模型参数
-    params = [0.0028, 0.054, 190679918.65329826]
-    wall_RC_params = pd.read_csv('rc_params_curvefit.csv', index_col=0)
-    wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
-                         'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
-                         'TSI_S11', 'TSI_S12', 'TSI_S13',
-                         'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
-
-    # 初始化 ThermalModel 类
-    thermal_model = ThermalModel(params, wall_RC_params, gp_model,'middle')
-
-    # 输入参数
-    Tamb_t = 15  # 当前环境温度
-    Tstar_t = 22
-    T_soil = 22
-    Tin_t = 22  # 当前室内温度
-    Qin_t = 100  # 内部热负荷
-    vent_flow = 0.2  # 通风质量流量
-    step_pre = 0.5  # 时间步长
-    Twall_t_dict = {}
-    for wall in wall_temp_columns:
-        Twall_t_dict[wall] = Tin_t
-
-    # 执行预测
-    Tin_t1, Twall_t1_dict, T_vent, Qzone_t, Qahu_t, Qspace_t = thermal_model.predict_next(Tamb_t, Tin_t, Twall_t_dict,
-                                                                                          Qin_t, step_pre, vent_flow,T_soil,
-                                                                                          Tsp_high=24, Tsp_low=21)
-
-    # 输出预测结果
-    print(f"下一时刻室温 Tin_t+1: {Tin_t1:.2f}°C")
-    print("下一时刻墙体温度 Twall_t1:")
-    for wall, temp in Twall_t1_dict.items():
-        print(f"  {wall}: {temp:.2f}°C")
-    print(f"室内热平衡负荷 Q_zone: {Qzone_t:.2f} W")
-    print(f"AHU 负荷 Q_ahu: {Qahu_t:.2f} W")
-    print(f"空间负荷 Q_space: {Qspace_t:.2f} W")
+# # 主函数，仅在直接运行脚本时执行
+# if __name__ == "__main__":
+#     from joblib import load
+#
+#     gp_model = "gp_model_final.pkl"
+#     # 预训练的 2R2C 模型参数
+#     params = [0.0028, 0.054, 190679918.65329826]
+#     wall_RC_params = pd.read_csv('rc_params_curvefit.csv', index_col=0)
+#     wall_temp_columns = ['TSI_S4', 'TSI_S6',  # roof
+#                          'TSI_S7', 'TSI_S8', 'TSI_S9', 'TSI_S10',  # window
+#                          'TSI_S11', 'TSI_S12', 'TSI_S13',
+#                          'TSI_S14']  # 'TSI_S1', 'TSI_S2', 'TSI_S3',  'TSI_S5',# ext wall
+#
+#     # 初始化 ThermalModel 类
+#     thermal_model = ThermalModel(params, wall_RC_params, gp_model,'middle')
+#
+#     # 输入参数
+#     Tamb_t = 15  # 当前环境温度
+#     Tstar_t = 22
+#     T_soil = 22
+#     Tin_t = 22  # 当前室内温度
+#     Qin_t = 100  # 内部热负荷
+#     vent_flow = 0.2  # 通风质量流量
+#     step_pre = 0.5  # 时间步长
+#     Twall_t_dict = {}
+#     for wall in wall_temp_columns:
+#         Twall_t_dict[wall] = Tin_t
+#
+#     # 执行预测
+#     Tin_t1, Twall_t1_dict, T_vent, Qzone_t, Qahu_t, Qspace_t = thermal_model.predict_next(Tamb_t, Tin_t, Twall_t_dict,
+#                                                                                           Qin_t, step_pre, vent_flow,T_soil,
+#                                                                                           Tsp_high=24, Tsp_low=21)
+#
+#     # 输出预测结果
+#     print(f"下一时刻室温 Tin_t+1: {Tin_t1:.2f}°C")
+#     print("下一时刻墙体温度 Twall_t1:")
+#     for wall, temp in Twall_t1_dict.items():
+#         print(f"  {wall}: {temp:.2f}°C")
+#     print(f"室内热平衡负荷 Q_zone: {Qzone_t:.2f} W")
+#     print(f"AHU 负荷 Q_ahu: {Qahu_t:.2f} W")
+#     print(f"空间负荷 Q_space: {Qspace_t:.2f} W")
 
 
 
