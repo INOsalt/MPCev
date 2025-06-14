@@ -5,6 +5,7 @@ from joblib import dump, load
 import torch.utils.data as Data
 import torch
 import torch.nn as nn
+import param_manage as pm
 # 参数与配置
 torch.manual_seed(100)  # 设置随机种子，以使实验结果具有可重复性
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -12,11 +13,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # 加载数据集
 def dataloader(batch_size, tag, workers=0):
     # 训练集
-    train_set = load(f'train_set_{tag}')
-    train_label = load(f'train_label_{tag}')
+    train_set = load(pm.train_set_RTPV )
+    train_label = load(pm.train_label_RTPV)
     # 测试集
-    test_set = load(f'test_set_{tag}')
-    test_label = load(f'test_label_{tag}')
+    test_set = load(pm.test_set_RTPV)
+    test_label = load(pm.test_label_RTPV)
 
     # 加载数据
     train_loader = Data.DataLoader(dataset=Data.TensorDataset(train_set, train_label),

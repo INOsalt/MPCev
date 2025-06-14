@@ -45,6 +45,11 @@ gp_model_name_top = os.path.join(init_model_path, "gp_model_best_top.pkl")
 gp_model_name_middle = os.path.join(init_model_path, "gp_model_best_middle.pkl")
 gp_model_name_bottom = os.path.join(init_model_path, "gp_model_best_bottom.pkl")
 
+train_set_RTPV = os.path.join(init_model_path, "train_set_RTPV")
+train_label_RTPV = os.path.join(init_model_path, "train_label_RTPV")
+test_set_RTPV = os.path.join(init_model_path, "test_set_RTPV")
+test_label_RTPV = os.path.join(init_model_path, "test_label_RTPV")
+
 # Combine base path with wall parameters CSV filenames
 wall_params_top = pd.read_csv(os.path.join(init_model_path, 'rc_params_curvefit_top.csv'), index_col=0)
 wall_params_middle = pd.read_csv(os.path.join(init_model_path, 'rc_params_curvefit_middle.csv'), index_col=0)
